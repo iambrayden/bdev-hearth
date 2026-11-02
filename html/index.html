@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hearth</title>
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Onboarding (no circles yet) -->
+        <section class="screen" id="screen-welcome" hidden>
+            <div class="welcome">
+                <div class="welcome-mark">
+                    <svg viewBox="0 0 64 64" class="mark"><path d="M8 30 32 10l24 20"/><path d="M14 26v28h36V26"/><path d="M32 48c-6 0-9-4-9-8 0-6 6-8 6-14 4 2 5 5 5 8 1-2 2-3 2-5 3 3 5 6 5 11 0 4-3 8-9 8z" class="flame"/></svg>
+                </div>
+                <h1>Hearth</h1>
+                <p class="muted">Keep your people close. See where your family and friends are, know when they get home, and call for help when you need it.</p>
+                <div class="stack">
+                    <button class="btn primary block" data-action="create-circle">Create a circle</button>
+                    <button class="btn ghost block" data-action="join-circle">I have an invite code</button>
+                </div>
+                <p class="muted small fine">Your location is only shared with circles you join, and you can pause it at any time.</p>
+            </div>
+        </section>
+
+        <!-- Main app -->
+        <section class="screen" id="screen-main" hidden>
+            <header class="top">
+                <button class="circle-switch" data-action="switch-circle">
+                    <span id="circle-name">Circle</span>
+                    <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="top-actions">
+                    <span class="pill paused" id="paused-pill" hidden>Paused</span>
+                    <button class="icon-btn" data-action="check-in" title="Check in">
+                        <svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><path d="m9 10 2 2 4-4"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <main>
+                <!-- Map -->
+                <section class="view active" id="view-map">
+                    <div id="map"></div>
+                    <div class="map-controls">
+                        <button class="fab" data-action="fit-all" title="Show everyone">
+                            <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15 14.5c3 0 6 1.8 6 5"/></svg>
+                        </button>
+                        <button class="fab" data-action="focus-me" title="My location">
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>
+                        </button>
+                    </div>
+                    <button class="sos" id="sos-btn" title="Hold for SOS">
+                        <svg viewBox="0 0 44 44" class="sos-ring"><circle cx="22" cy="22" r="20"/></svg>
+                        <span>SOS</span>
+                    </button>
+                    <div class="trail-bar" id="trail-bar" hidden>
+                        <span id="trail-label">History</span>
+                        <button class="btn ghost small" data-action="clear-trail">Close</button>
+                    </div>
+                    <div class="pick-overlay" id="pick-overlay" hidden>
+                        <div class="crosshair"><span></span></div>
+                        <div class="pick-bar">
+                            <span>Move the map to the spot</span>
+                            <div class="row">
+                                <button class="btn ghost small" data-action="pick-cancel">Cancel</button>
+                                <button class="btn primary small" data-action="pick-confirm">Use this spot</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="sheet-members" id="members-sheet">
+                        <button class="grab" data-action="toggle-members" aria-label="Expand"><span></span></button>
+                        <div class="list" id="members-list"></div>
+                    </div>
+                </section>
+
+                <!-- Places -->
+                <section class="view" id="view-places">
+                    <div class="view-head">
+                        <h2>Places</h2>
+                        <button class="btn primary small" data-action="add-place">Add place</button>
+                    </div>
+                    <p class="muted small hint">Get a notification when someone arrives at or leaves a place.</p>
+                    <div class="list" id="places-list"></div>
+                </section>
+
+                <!-- Activity -->
+                <section class="view" id="view-activity">
+                    <div class="view-head"><h2>Activity</h2></div>
+                    <div class="list" id="activity-list"></div>
+                </section>
+
+                <!-- Circle -->
+                <section class="view" id="view-circle">
+                    <div class="view-head">
+                        <h2 id="circle-title">Circle</h2>
+                        <button class="btn ghost small" data-action="rename-circle" id="rename-btn">Rename</button>
+                    </div>
+
+                    <div class="card invite">
+                        <div class="muted small">Invite code</div>
+                        <div class="code" id="invite-code">------</div>
+                        <div class="row wrap">
+                            <button class="btn ghost small" data-action="copy-code">Copy</button>
+                            <button class="btn ghost small" data-action="invite-phone">Text an invite</button>
+                            <button class="btn ghost small" data-action="new-code" id="new-code-btn">New code</button>
+                        </div>
+                    </div>
+
+                    <div class="section-title">My settings</div>
+                    <div class="card">
+                        <label class="toggle-row">
+                            <div>
+                                <div>Share my location</div>
+                                <div class="muted small">Turn off to hide your location from this circle</div>
+                            </div>
+                            <input type="checkbox" id="toggle-sharing" class="switch">
+                        </label>
+                        <label class="toggle-row">
+                            <div>
+                                <div>Notifications</div>
+                                <div class="muted small">Arrivals, departures and check-ins. SOS alerts always come through.</div>
+                            </div>
+                            <input type="checkbox" id="toggle-notify" class="switch">
+                        </label>
+                    </div>
+
+                    <div class="section-title" id="members-title">Members</div>
+                    <div class="list" id="circle-members"></div>
+
+                    <div class="section-title">Circles</div>
+                    <div class="stack">
+                        <button class="btn ghost block" data-action="create-circle">Create another circle</button>
+                        <button class="btn ghost block" data-action="join-circle">Join with a code</button>
+                        <button class="btn danger block" data-action="leave-circle">Leave circle</button>
+                        <button class="btn danger block" data-action="delete-circle" id="delete-btn">Delete circle</button>
+                    </div>
+                </section>
+            </main>
+
+            <nav class="tabs">
+                <button class="tab active" data-view="map">
+                    <svg viewBox="0 0 24 24"><path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>
+                    Map
+                </button>
+                <button class="tab" data-view="places">
+                    <svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                    Places
+                </button>
+                <button class="tab" data-view="activity">
+                    <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+                    Activity
+                    <i class="dot-badge" id="activity-badge" hidden></i>
+                </button>
+                <button class="tab" data-view="circle">
+                    <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 13.8c2.1.8 3.5 3 3.5 6.2"/></svg>
+                    Circle
+                </button>
+            </nav>
+        </section>
+
+        <!-- Loading / error -->
+        <section class="screen" id="screen-loading">
+            <div class="center-msg">
+                <div class="spinner"></div>
+                <p class="muted" id="loading-msg">Loading…</p>
+            </div>
+        </section>
+
+        <!-- Bottom sheet modal -->
+        <div class="backdrop" id="backdrop" hidden></div>
+        <div class="sheet" id="sheet" hidden>
+            <div class="sheet-grab"><span></span></div>
+            <div id="sheet-body"></div>
+        </div>
+
+        <div class="toast" id="toast"></div>
+    </div>
+
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <!-- Optional Quasar bridge (theme, native toasts). Missing outside the phone, that's fine. -->
+    <script src="https://cfx-nui-qs-smartphone/web/build/bridge/qs-phone-bridge.js" onerror="this.remove()"></script>
+    <script src="mock.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
