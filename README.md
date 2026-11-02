@@ -73,7 +73,7 @@ Everything is in `config.lua`. The settings people usually change:
 | `Config.Places.*` | 15 places, 25-400 m | Geofence limits, exit buffer, icons |
 | `Config.Alerts.*` | on | SOS/crash/downed alerts and cooldowns |
 | `Config.SpeedUnit` | `mph` | `mph` (miles/feet) or `kmh` (km/m) |
-| `Config.Map` | `map/map.jpg` | Map image, its world-coordinate bounds and the Cayo inset |
+| `Config.Map` | `map/map.jpg` | Map image (or high-res tiles from `tools/make_tiles.py`), bounds and the Cayo inset |
 
 If you change `Config.App.name`, also change `appId` in `html/app.js` (`setupBridge`).
 

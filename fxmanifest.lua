@@ -40,6 +40,7 @@ files {
     'html/map/*.webp',
     'html/map/*.jpg',
     'html/map/*.png',
+    'html/map/tiles/**/*.webp',
 }
 
 dependencies {

@@ -9,8 +9,18 @@
   about 2.7 km west of where it really is. The offset is anchored on the Cayo airstrip hangar
   (4494, -4523) and is accurate to roughly ±50 m.
 
-A higher-resolution export of the same map can replace `map.jpg` without touching the
-numbers. A different map image needs new bounds.
+## Sharpness
 
-The app picks its zoom range from the image resolution, so a sharper image allows closer
-zoom. Keep the image at 4096 px or smaller; the phone loads it in one go.
+The bundled `map.jpg` is only 1608 px wide, about 8 m per pixel, so it can't show street-level
+detail. The app caps zoom at about 1.7× the image's resolution to keep it from turning to mush.
+
+For a sharp map, export the same map at high resolution (8000 px wide or more) and cut it into
+tiles. Only the tiles on screen are loaded, so even a huge map stays light on the phone:
+
+```bash
+pip install pillow
+python tools/make_tiles.py path/to/big-map.png
+```
+
+Then paste the `Tiles = { ... }` line it prints into `Config.Map`. The bounds and the Cayo
+inset stay the same as long as it's the same map render.

@@ -115,6 +115,11 @@ Config.Map = {
     Bounds = { minX = -7729.3, maxX = 5763.0, minY = -6554.6, maxY = 10215.9 },
     Background = '#0a2250',        -- ocean colour around the image
 
+    -- For a sharp map, cut a high-resolution export of this same map into tiles with
+    --   python tools/make_tiles.py path/to/big-map.png
+    -- and paste the Tiles line it prints here. Tiles replace Image when set.
+    -- Tiles = { Url = 'map/tiles/{z}/{x}/{y}.webp', MinZoom = -6, MaxZoom = 0 },
+
     -- Areas the image draws somewhere other than their real position. Positions inside the
     -- real-world box are shifted by offset onto the drawn copy (and back when picking a spot).
     Insets = {

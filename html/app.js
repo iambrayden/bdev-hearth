@@ -195,8 +195,12 @@
         native: -2.5, // zoom level where 1 image pixel = 1 screen pixel (set once the image loads)
         insets: [],
 
-        /** Zoom relative to the map image's native resolution, so it never gets blurry. */
-        z(offset) { return this.native + offset; },
+        /**
+         * A wanted zoom level, capped so the map image is never stretched more than ~1.7x
+         * (a low-resolution image gets a wider view instead of a blurry one).
+         */
+        zoom(wanted) { return Math.min(wanted, this.native + 0.75); },
+        maxZoom() { return this.native + 1.5; },
 
         /**
          * World coords -> map [lat, lng]. Insets move areas the map image draws somewhere
@@ -232,7 +236,7 @@
                 zoomControl: false,
                 attributionControl: false,
                 minZoom: -6,
-                maxZoom: this.z(2.5),
+                maxZoom: this.maxZoom(),
                 zoomSnap: 0.25,
                 zoomDelta: 0.5,
                 wheelPxPerZoomLevel: 90,
@@ -246,10 +250,38 @@
             this.map.fitBounds(this.bounds);
 
             if (cfg.Background) el.style.background = cfg.Background;
+            if (cfg.Tiles && cfg.Tiles.Url) {
+                // Pre-cut tiles (tools/make_tiles.py): only the visible part loads, so a
+                // high-resolution map stays sharp without loading one huge image.
+                this.native = cfg.Tiles.MaxZoom;
+                this.map.setMaxZoom(this.maxZoom());
+                L.tileLayer(cfg.Tiles.Url, {
+                    tileSize: 256,
+                    minZoom: -6,
+                    maxZoom: this.maxZoom(),
+                    minNativeZoom: cfg.Tiles.MinZoom,
+                    maxNativeZoom: cfg.Tiles.MaxZoom,
+                    bounds: this.bounds,
+                    noWrap: true,
+                    keepBuffer: 3,
+                    zIndex: 1,
+                }).addTo(this.map);
+            } else {
+                this.loadImage(cfg, b, el);
+            }
+
+            this.placeLayer = L.layerGroup().addTo(this.map);
+            this.trailLayer = L.layerGroup().addTo(this.map);
+            this.memberLayer = L.layerGroup().addTo(this.map);
+            this.map.on('move', () => this.updatePick());
+        },
+
+        /** Single-image background (fine for images up to ~4096 px). */
+        loadImage(cfg, b, el) {
             const img = new Image();
             img.onload = () => {
                 this.native = Math.log2(img.naturalWidth / (b.maxX - b.minX));
-                this.map.setMaxZoom(this.z(2.5));
+                this.map.setMaxZoom(this.maxZoom());
                 L.imageOverlay(img.src, this.bounds, { zIndex: 1 }).addTo(this.map);
             };
             img.onerror = () => {
@@ -258,11 +290,6 @@
                 this.grid().addTo(this.map);
             };
             img.src = cfg.Image || 'map/map.jpg';
-
-            this.placeLayer = L.layerGroup().addTo(this.map);
-            this.trailLayer = L.layerGroup().addTo(this.map);
-            this.memberLayer = L.layerGroup().addTo(this.map);
-            this.map.on('move', () => this.updatePick());
         },
 
         /** Fallback background when no map image is installed. */
@@ -355,8 +382,8 @@
             this.members = {}; this.places = {};
         },
 
-        focus(x, y, offset = 1.5) {
-            const zoom = this.z(offset);
+        focus(x, y, wanted = -1) {
+            const zoom = this.zoom(wanted);
             if (!this.map) return;
             this.map.flyTo(this.ll(x, y), Math.max(zoom, this.map.getZoom()), { duration: 0.6 });
         },
@@ -364,8 +391,8 @@
         fitMembers() {
             const pts = (circle()?.members || []).filter((m) => hasPos(m) && (m.sharing || m.isMe)).map((m) => this.ll(m.x, m.y));
             if (!this.map || pts.length === 0) return;
-            if (pts.length === 1) return this.map.setView(pts[0], this.z(1.5));
-            this.map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [40, 90], paddingBottomRight: [40, 200], maxZoom: this.z(1.5) });
+            if (pts.length === 1) return this.map.setView(pts[0], this.zoom(-1));
+            this.map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [40, 90], paddingBottomRight: [40, 200], maxZoom: this.zoom(-1) });
         },
 
         showTrail(points, color) {
@@ -375,15 +402,15 @@
             L.polyline(ll, { color, weight: 4, opacity: 0.85, lineJoin: 'round', dashArray: '1 8', lineCap: 'round' }).addTo(this.trailLayer);
             L.polyline(ll, { color, weight: 3, opacity: 0.5 }).addTo(this.trailLayer);
             L.circleMarker(ll[0], { radius: 5, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 }).addTo(this.trailLayer);
-            if (ll.length > 1) this.map.fitBounds(L.latLngBounds(ll), { paddingTopLeft: [40, 130], paddingBottomRight: [40, 200], maxZoom: this.z(2) });
-            else this.map.setView(ll[0], this.z(1.5));
+            if (ll.length > 1) this.map.fitBounds(L.latLngBounds(ll), { paddingTopLeft: [40, 130], paddingBottomRight: [40, 200], maxZoom: this.zoom(-0.5) });
+            else this.map.setView(ll[0], this.zoom(-1));
         },
 
         flashAt(x, y) {
             if (this.flash) this.map.removeLayer(this.flash);
             this.flash = L.marker(this.ll(x, y), { icon: L.divIcon({ className: 'flash-pin', html: '<div></div>', iconSize: [0, 0] }), zIndexOffset: 2000 }).addTo(this.map);
             setTimeout(() => { if (this.flash) { this.map.removeLayer(this.flash); this.flash = null; } }, 8000);
-            this.focus(x, y, 2);
+            this.focus(x, y, -0.5);
         },
 
         startPick(radius) {
@@ -900,7 +927,7 @@
         'pick-circle': (el) => { closeSheet(); selectCircle(Number(el.dataset.id)); },
         'check-in': openCheckIn,
         'fit-all': () => { clearTrail(); MapView.fitMembers(); },
-        'focus-me': () => { const m = me(); if (hasPos(m)) MapView.focus(m.x, m.y, 2); else toast('Your location is not available yet', false); },
+        'focus-me': () => { const m = me(); if (hasPos(m)) MapView.focus(m.x, m.y, -0.5); else toast('Your location is not available yet', false); },
         'toggle-members': () => $('members-sheet').classList.toggle('expanded'),
         'open-member': (el) => openMember(el.dataset.id),
         'member-gps': async (el) => { if (await act('waypoint', { citizenid: el.dataset.id })) closeSheet(); },
@@ -936,7 +963,7 @@
         'place-map': (el) => {
             const p = placeById(Number(el.dataset.id));
             closeSheet(); setView('map');
-            if (p) MapView.focus(p.x, p.y, 2);
+            if (p) MapView.focus(p.x, p.y, -0.5);
         },
         'place-gps': async (el) => {
             const p = placeById(Number(el.dataset.id));
