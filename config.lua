@@ -16,7 +16,7 @@ Config.App = {
     category = 'Social',           -- app store category
     creator = 'bdev',
     age = '12+',
-    appStoreOnly = false,          -- false = already on every home screen, true = download it from the App Store
+    appStoreOnly = true,           -- true = players download it from the App Store, false = already on every home screen
     price = 0,                     -- App Store price (only used when appStoreOnly = true)
     job = false,                   -- Smartphone PRO only: false = everyone, or a job name
     blockedJobs = {},              -- Smartphone PRO only

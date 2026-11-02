@@ -53,8 +53,8 @@ vehicle crashes and alerts the circle when a member goes down.
    ```
 3. Tables are created on start (`install.sql` has them if you prefer to import by hand).
 4. The map image ships in `html/map/` already calibrated (see `html/map/README.md`).
-5. Restart. **Hearth** appears on every home screen (or in the App Store with
-   `Config.App.appStoreOnly = true`).
+5. Restart. Players download **Hearth** from the phone's App Store (Social category). Set
+   `Config.App.appStoreOnly = false` to put it on every home screen instead.
 
 If the app doesn't show up, run `/hearthapp` in game. It re-registers the app and prints
 the phone's answer in F8 (e.g. `missing_app_id`, `missing_category`).
@@ -65,7 +65,7 @@ Everything is in `config.lua`. The settings people usually change:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `Config.App.*` | `Hearth`, Social | Name, category and App Store settings |
+| `Config.App.*` | `Hearth`, Social, App Store only | Name, category and App Store settings |
 | `Config.RequirePhoneItem` / `PhoneItems` | `false` / `{ 'phone' }` | Only share while carrying a phone item |
 | `Config.Circles.MaxPerPlayer` / `MaxMembers` | 5 / 12 | Limits |
 | `Config.Location.UpdateSeconds` | 3 | How often the server samples positions |
