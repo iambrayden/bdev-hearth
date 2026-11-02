@@ -192,11 +192,39 @@
         trail: null,
         flash: null,
         pickCircle: null,
+        native: -2.5, // zoom level where 1 image pixel = 1 screen pixel (set once the image loads)
+        insets: [],
+
+        /** Zoom relative to the map image's native resolution, so it never gets blurry. */
+        z(offset) { return this.native + offset; },
+
+        /**
+         * World coords -> map [lat, lng]. Insets move areas the map image draws somewhere
+         * else (e.g. Cayo Perico pulled closer to the mainland).
+         */
+        ll(x, y) {
+            for (const i of this.insets) {
+                if (x >= i.minX && x <= i.maxX && y >= i.minY && y <= i.maxY) return [y + i.offsetY, x + i.offsetX];
+            }
+            return [y, x];
+        },
+
+        /** Map lat/lng -> world coords (reverse of ll), used when picking a spot. */
+        world(latlng) {
+            const x = latlng.lng, y = latlng.lat;
+            for (const i of this.insets) {
+                if (x >= i.minX + i.offsetX && x <= i.maxX + i.offsetX && y >= i.minY + i.offsetY && y <= i.maxY + i.offsetY) {
+                    return { x: x - i.offsetX, y: y - i.offsetY };
+                }
+            }
+            return { x, y };
+        },
 
         init(settings) {
             if (this.map) return;
             const cfg = settings.map || {};
-            const b = cfg.Bounds || { minX: -5661.6, maxX: 6693.6, minY: -4058.5, maxY: 8429.3 };
+            const b = cfg.Bounds || { minX: -7729.3, maxX: 5763.0, minY: -6554.6, maxY: 10215.9 };
+            this.insets = Array.isArray(cfg.Insets) ? cfg.Insets : [];
             // World coordinates are used directly: lat = y, lng = x.
             this.bounds = L.latLngBounds([b.minY, b.minX], [b.maxY, b.maxX]);
             this.map = L.map('map', {
@@ -204,7 +232,7 @@
                 zoomControl: false,
                 attributionControl: false,
                 minZoom: -6,
-                maxZoom: 1.5,
+                maxZoom: this.z(2.5),
                 zoomSnap: 0.25,
                 zoomDelta: 0.5,
                 wheelPxPerZoomLevel: 90,
@@ -219,13 +247,17 @@
 
             if (cfg.Background) el.style.background = cfg.Background;
             const img = new Image();
-            img.onload = () => L.imageOverlay(img.src, this.bounds, { zIndex: 1 }).addTo(this.map);
+            img.onload = () => {
+                this.native = Math.log2(img.naturalWidth / (b.maxX - b.minX));
+                this.map.setMaxZoom(this.z(2.5));
+                L.imageOverlay(img.src, this.bounds, { zIndex: 1 }).addTo(this.map);
+            };
             img.onerror = () => {
                 el.style.background = '';
                 el.classList.add('no-image');
                 this.grid().addTo(this.map);
             };
-            img.src = cfg.Image || 'map/gta5.webp';
+            img.src = cfg.Image || 'map/map.jpg';
 
             this.placeLayer = L.layerGroup().addTo(this.map);
             this.trailLayer = L.layerGroup().addTo(this.map);
@@ -266,7 +298,7 @@
                 if (!hasPos(m) || (!m.sharing && !m.isMe)) continue;
                 seen.add(m.citizenid);
                 const html = this.pinHtml(m);
-                const ll = [m.y, m.x];
+                const ll = this.ll(m.x, m.y);
                 let e = this.members[m.citizenid];
                 if (!e) {
                     const marker = L.marker(ll, {
@@ -300,8 +332,8 @@
                 if (e && e.key === key) continue;
                 if (e) { this.placeLayer.removeLayer(e.circle); this.placeLayer.removeLayer(e.label); }
                 const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#ff7a3d';
-                const c = L.circle([p.y, p.x], { radius: p.radius, color: accent, weight: 2, fillColor: accent, fillOpacity: 0.14, interactive: false });
-                const label = L.marker([p.y, p.x], {
+                const c = L.circle(this.ll(p.x, p.y), { radius: p.radius, color: accent, weight: 2, fillColor: accent, fillOpacity: 0.14, interactive: false });
+                const label = L.marker(this.ll(p.x, p.y), {
                     icon: L.divIcon({ className: 'place-pin', html: `<div>${icon(p.icon)}${esc(p.name)}</div>`, iconSize: [0, 0] }),
                     zIndexOffset: -100,
                 });
@@ -323,34 +355,35 @@
             this.members = {}; this.places = {};
         },
 
-        focus(x, y, zoom = -1) {
+        focus(x, y, offset = 1.5) {
+            const zoom = this.z(offset);
             if (!this.map) return;
-            this.map.flyTo([y, x], Math.max(zoom, this.map.getZoom()), { duration: 0.6 });
+            this.map.flyTo(this.ll(x, y), Math.max(zoom, this.map.getZoom()), { duration: 0.6 });
         },
 
         fitMembers() {
-            const pts = (circle()?.members || []).filter((m) => hasPos(m) && (m.sharing || m.isMe)).map((m) => [m.y, m.x]);
+            const pts = (circle()?.members || []).filter((m) => hasPos(m) && (m.sharing || m.isMe)).map((m) => this.ll(m.x, m.y));
             if (!this.map || pts.length === 0) return;
-            if (pts.length === 1) return this.map.setView(pts[0], -1);
-            this.map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [40, 90], paddingBottomRight: [40, 200], maxZoom: -1 });
+            if (pts.length === 1) return this.map.setView(pts[0], this.z(1.5));
+            this.map.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [40, 90], paddingBottomRight: [40, 200], maxZoom: this.z(1.5) });
         },
 
         showTrail(points, color) {
             this.trailLayer.clearLayers();
             if (!points.length) return;
-            const ll = points.map((p) => [p[1], p[0]]);
+            const ll = points.map((p) => this.ll(p[0], p[1]));
             L.polyline(ll, { color, weight: 4, opacity: 0.85, lineJoin: 'round', dashArray: '1 8', lineCap: 'round' }).addTo(this.trailLayer);
             L.polyline(ll, { color, weight: 3, opacity: 0.5 }).addTo(this.trailLayer);
             L.circleMarker(ll[0], { radius: 5, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 }).addTo(this.trailLayer);
-            if (ll.length > 1) this.map.fitBounds(L.latLngBounds(ll), { paddingTopLeft: [40, 130], paddingBottomRight: [40, 200], maxZoom: -0.5 });
-            else this.map.setView(ll[0], -1);
+            if (ll.length > 1) this.map.fitBounds(L.latLngBounds(ll), { paddingTopLeft: [40, 130], paddingBottomRight: [40, 200], maxZoom: this.z(2) });
+            else this.map.setView(ll[0], this.z(1.5));
         },
 
         flashAt(x, y) {
             if (this.flash) this.map.removeLayer(this.flash);
-            this.flash = L.marker([y, x], { icon: L.divIcon({ className: 'flash-pin', html: '<div></div>', iconSize: [0, 0] }), zIndexOffset: 2000 }).addTo(this.map);
+            this.flash = L.marker(this.ll(x, y), { icon: L.divIcon({ className: 'flash-pin', html: '<div></div>', iconSize: [0, 0] }), zIndexOffset: 2000 }).addTo(this.map);
             setTimeout(() => { if (this.flash) { this.map.removeLayer(this.flash); this.flash = null; } }, 8000);
-            this.focus(x, y, -0.5);
+            this.focus(x, y, 2);
         },
 
         startPick(radius) {
@@ -360,10 +393,10 @@
         updatePick() { if (this.pickCircle) this.pickCircle.setLatLng(this.map.getCenter()); },
         endPick() {
             if (!this.pickCircle) return null;
-            const c = this.map.getCenter();
+            const c = this.world(this.map.getCenter());
             this.map.removeLayer(this.pickCircle);
             this.pickCircle = null;
-            return { x: c.lng, y: c.lat };
+            return c;
         },
     };
 
@@ -603,7 +636,7 @@
     function openMember(cid) {
         renderMemberSheet(cid, true);
         const m = memberById(cid);
-        if (hasPos(m) && (m.sharing || m.isMe) && state.view === 'map') MapView.focus(m.x, m.y, -1);
+        if (hasPos(m) && (m.sharing || m.isMe) && state.view === 'map') MapView.focus(m.x, m.y);
     }
 
     function renderMemberSheet(cid, open = false) {
@@ -867,7 +900,7 @@
         'pick-circle': (el) => { closeSheet(); selectCircle(Number(el.dataset.id)); },
         'check-in': openCheckIn,
         'fit-all': () => { clearTrail(); MapView.fitMembers(); },
-        'focus-me': () => { const m = me(); if (hasPos(m)) MapView.focus(m.x, m.y, -0.5); else toast('Your location is not available yet', false); },
+        'focus-me': () => { const m = me(); if (hasPos(m)) MapView.focus(m.x, m.y, 2); else toast('Your location is not available yet', false); },
         'toggle-members': () => $('members-sheet').classList.toggle('expanded'),
         'open-member': (el) => openMember(el.dataset.id),
         'member-gps': async (el) => { if (await act('waypoint', { citizenid: el.dataset.id })) closeSheet(); },
@@ -903,7 +936,7 @@
         'place-map': (el) => {
             const p = placeById(Number(el.dataset.id));
             closeSheet(); setView('map');
-            if (p) MapView.focus(p.x, p.y, -0.5);
+            if (p) MapView.focus(p.x, p.y, 2);
         },
         'place-gps': async (el) => {
             const p = placeById(Number(el.dataset.id));

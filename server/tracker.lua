@@ -134,14 +134,35 @@ end
 ---------------------------------------------------------------------
 -- Main loop
 ---------------------------------------------------------------------
+--- Speed in m/s. Under OneSync a ped sitting in a vehicle reports ~0 velocity, so read the
+--- vehicle's velocity instead; fall back to distance moved since the last sample, then to
+--- what the client measured (GetEntitySpeed) if that is recent.
+local function measureSpeed(ped, veh, live, coords, ctx)
+    local ent = veh ~= 0 and veh or ped
+    local vel = GetEntityVelocity(ent)
+    local speed = math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
+
+    local t = GetGameTimer()
+    if live and live.x and live.sampledAt then
+        local dt = (t - live.sampledAt) / 1000
+        if dt >= 1 and dt <= Config.Location.UpdateSeconds * 3 then
+            local moved = math.sqrt((coords.x - live.x) ^ 2 + (coords.y - live.y) ^ 2)
+            local derived = moved / dt
+            if derived < 120 then speed = math.max(speed, derived) end -- ignore teleports
+        end
+    end
+    if ctx.speed and ctx.at and t - ctx.at < 6000 then speed = math.max(speed, ctx.speed) end
+    return speed, t
+end
+
 local function sample(src, cid, now)
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 or not DoesEntityExist(ped) then return end
     local coords = GetEntityCoords(ped)
-    local vel = GetEntityVelocity(ped)
-    local speed = math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
     local veh = GetVehiclePedIsIn(ped, false)
     local ctx = Tracker.context[src] or {}
+    local inVehicle = veh ~= 0 or (ctx.inVehicle == true and ctx.at and GetGameTimer() - ctx.at < 6000)
+    local speed, sampledAt = measureSpeed(ped, veh, Tracker.live[cid], coords, ctx)
 
     local live = Tracker.live[cid]
     if not live then
@@ -160,8 +181,9 @@ local function sample(src, cid, now)
     local wasDowned = live.downed
     live.src = src
     live.x, live.y, live.z = coords.x, coords.y, coords.z
-    live.speed = speed
-    live.driving = veh ~= 0 and speed > Config.DrivingSpeed
+    live.sampledAt = sampledAt
+    live.speed = inVehicle and speed or 0.0
+    live.driving = inVehicle and speed > Config.DrivingSpeed
     live.street, live.zone = ctx.street, ctx.zone
     live.downed = Bridge.IsDowned(src)
     live.hasPhone = hasPhone(src, now)
@@ -174,6 +196,43 @@ local function sample(src, cid, now)
 
     if Config.Alerts.DownedAlert and live.downed and wasDowned == false then
         alertCircles(cid, live, 'downed')
+    end
+end
+
+---------------------------------------------------------------------
+-- Live alert tracking: after an SOS / crash / downed alert, push the person's position to
+-- the circle members' alert blips every tick until the alert expires.
+---------------------------------------------------------------------
+Tracker.follows = {} -- [targetCid] = { untilT, watchers = {[cid] = true}, lx, ly }
+
+function Tracker.Follow(targetCid, watcherCids, seconds)
+    local f = Tracker.follows[targetCid] or { watchers = {} }
+    f.untilT = os.time() + seconds
+    for _, w in ipairs(watcherCids) do f.watchers[w] = true end
+    Tracker.follows[targetCid] = f
+end
+
+local function pushFollows(now)
+    for target, f in pairs(Tracker.follows) do
+        if now >= f.untilT then
+            for w in pairs(f.watchers) do
+                local src = Tracker.srcOf[w]
+                if src then TriggerClientEvent('bdev-hearth:client:alertEnd', src, target) end
+            end
+            Tracker.follows[target] = nil
+        else
+            local live = Tracker.live[target]
+            -- Only send when they moved, to keep network traffic down.
+            if live and live.x and (not f.lx or math.abs(live.x - f.lx) + math.abs(live.y - f.ly) > 3.0) then
+                f.lx, f.ly = live.x, live.y
+                for w in pairs(f.watchers) do
+                    local src = Tracker.srcOf[w]
+                    if src then
+                        TriggerClientEvent('bdev-hearth:client:alertMove', src, target, live.x, live.y, live.z)
+                    end
+                end
+            end
+        end
     end
 end
 
@@ -213,6 +272,8 @@ local function tick()
         end
     end
 
+    if next(Tracker.follows) then pushFollows(now) end
+
     -- Players who logged out or dropped: persist their last position, then forget them.
     local gone = {}
     for cid in pairs(Tracker.srcOf) do
@@ -248,11 +309,18 @@ function Tracker.Start()
     end)
 end
 
--- Street / zone labels from the client (they need client-only natives).
-RegisterNetEvent('bdev-hearth:server:context', function(street, zone)
+-- Street / zone labels from the client (they need client-only natives), plus the client's own
+-- vehicle speed as a fallback for the speed shown in the app.
+RegisterNetEvent('bdev-hearth:server:context', function(street, zone, inVehicle, speed)
     local src = source
     if type(street) ~= 'string' or type(zone) ~= 'string' then return end
-    Tracker.context[src] = { street = street:sub(1, 80), zone = zone:sub(1, 80) }
+    speed = tonumber(speed)
+    Tracker.context[src] = {
+        street = street:sub(1, 80), zone = zone:sub(1, 80),
+        inVehicle = inVehicle == true,
+        speed = speed and speed >= 0 and speed < 150 and speed or nil,
+        at = GetGameTimer(),
+    }
 end)
 
 AddEventHandler('playerDropped', function()

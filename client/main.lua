@@ -72,7 +72,7 @@ RegisterNUICallback('copy', function(data, cb)
 end)
 
 ---------------------------------------------------------------------
--- Street / zone labels. Positions themselves are read on the server.
+-- Street / zone labels and vehicle speed. Positions themselves are read on the server.
 ---------------------------------------------------------------------
 CreateThread(function()
     local lastStreet, lastZone
@@ -85,9 +85,12 @@ CreateThread(function()
             if cross and cross ~= '' then street = ('%s & %s'):format(street, cross) end
             local zone = GetLabelText(GetNameOfZone(coords.x, coords.y, coords.z))
             if zone == 'NULL' then zone = '' end
-            if street ~= lastStreet or zone ~= lastZone then
+            local veh = cache.vehicle
+            local speed = veh and GetEntitySpeed(veh) or 0.0
+            -- While driving, send every tick so the app shows a live speed; otherwise only on change.
+            if veh or street ~= lastStreet or zone ~= lastZone then
                 lastStreet, lastZone = street, zone
-                TriggerServerEvent('bdev-hearth:server:context', street, zone)
+                TriggerServerEvent('bdev-hearth:server:context', street, zone, veh ~= nil and veh ~= false, speed)
             end
         end
         Wait(2000)

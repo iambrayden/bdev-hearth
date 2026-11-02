@@ -1,6 +1,6 @@
 -- SOS / crash / downed alerts on the map, and crash detection.
 
-local alertBlips = {}
+local alerts = {} -- [id (citizenid of the person in trouble)] = { blip, radius, token }
 
 local ALERT = {
     sos = { label = 'SOS', color = 1 },
@@ -8,40 +8,63 @@ local ALERT = {
     downed = { label = 'Needs help', color = 1 },
 }
 
+local function removeAlert(id)
+    local a = alerts[id]
+    if not a then return end
+    if DoesBlipExist(a.blip) then RemoveBlip(a.blip) end
+    if DoesBlipExist(a.radius) then RemoveBlip(a.radius) end
+    alerts[id] = nil
+end
+
 RegisterNetEvent('bdev-hearth:client:alert', function(data)
     if type(data) ~= 'table' or not data.x then return end
     local a = ALERT[data.kind] or ALERT.sos
+    local id = data.id or ('%s:%s'):format(data.name, GetGameTimer())
+    removeAlert(id) -- a new alert from the same person replaces the old blip
 
-    local blip = AddBlipForCoord(data.x + 0.0, data.y + 0.0, (data.z or 0.0) + 0.0)
+    local x, y, z = data.x + 0.0, data.y + 0.0, (data.z or 0.0) + 0.0
+    local blip = AddBlipForCoord(x, y, z)
     SetBlipSprite(blip, 280)
     SetBlipColour(blip, a.color)
     SetBlipScale(blip, 1.1)
     SetBlipFlashes(blip, true)
     SetBlipAsShortRange(blip, false)
+    SetBlipPriority(blip, 12)
     BeginTextCommandSetBlipName('STRING')
     AddTextComponentSubstringPlayerName(('%s: %s'):format(a.label, data.name or '?'))
     EndTextCommandSetBlipName(blip)
 
-    local radius = AddBlipForRadius(data.x + 0.0, data.y + 0.0, (data.z or 0.0) + 0.0, 60.0)
+    local radius = AddBlipForRadius(x, y, z, 60.0)
     SetBlipColour(radius, a.color)
     SetBlipAlpha(radius, 90)
 
-    alertBlips[#alertBlips + 1] = { blip, radius }
+    local token = {}
+    alerts[id] = { blip = blip, radius = radius, token = token }
     PlaySoundFrontend(-1, 'Beep_Red', 'DLC_HEIST_HACKING_SNAKE_SOUNDS', true)
 
-    SetTimeout(Config.Alerts.SOSBlipSeconds * 1000, function()
-        if DoesBlipExist(blip) then RemoveBlip(blip) end
-        if DoesBlipExist(radius) then RemoveBlip(radius) end
+    -- Safety net in case the server's "alert ended" message never arrives.
+    SetTimeout(((data.seconds or Config.Alerts.SOSBlipSeconds) + 15) * 1000, function()
+        if alerts[id] and alerts[id].token == token then removeAlert(id) end
     end)
+end)
+
+-- The server pushes the person's position while the alert is active, so the blip
+-- follows them on the pause-menu map and minimap.
+RegisterNetEvent('bdev-hearth:client:alertMove', function(id, x, y, z)
+    local a = alerts[id]
+    if not a or not x then return end
+    local pos = vector3(x + 0.0, y + 0.0, (z or 0.0) + 0.0)
+    if DoesBlipExist(a.blip) then SetBlipCoords(a.blip, pos.x, pos.y, pos.z) end
+    if DoesBlipExist(a.radius) then SetBlipCoords(a.radius, pos.x, pos.y, pos.z) end
+end)
+
+RegisterNetEvent('bdev-hearth:client:alertEnd', function(id)
+    removeAlert(id)
 end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
-    for _, pair in ipairs(alertBlips) do
-        for _, b in ipairs(pair) do
-            if DoesBlipExist(b) then RemoveBlip(b) end
-        end
-    end
+    for id in pairs(alerts) do removeAlert(id) end
 end)
 
 ---------------------------------------------------------------------

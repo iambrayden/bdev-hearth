@@ -22,7 +22,7 @@ window.HearthMock = (() => {
             B2: { name: 'Jordan Herrell', online: true, driving: true, route: 'B2', t: 0.1 },
             C3: { name: 'Riley Herrell', online: true, route: 'C3', t: 0.4, street: 'Vespucci Blvd', zone: 'Little Seoul' },
             D4: { name: 'Sam Ortiz', online: false, noPhone: false, x: 1850, y: 3700, street: 'Alhambra Dr', zone: 'Sandy Shores', updated: now() - 7200 },
-            E5: { name: 'Alex Kim', online: true, x: -200, y: 6300, street: 'Paleto Blvd', zone: 'Paleto Bay', downed: false },
+            E5: { name: 'Alex Kim', online: true, x: 4494, y: -4523, street: 'Airstrip', zone: 'Cayo Perico', downed: false },
         },
     };
     const add = (cid, id, role, sharing = true) => (db.circles[id - 1].members[cid] = { citizenid: cid, role, sharing, notify: true });
@@ -102,7 +102,10 @@ window.HearthMock = (() => {
     const SETTINGS = {
         speedUnit: 'mph', staleSeconds: 20, refreshMs: 1500, history: true, maxMembers: 12, nameMax: 24,
         places: { minRadius: 25, maxRadius: 400, defaultRadius: 75, icons: ['home', 'work', 'school', 'gym', 'shop', 'star'], membersCanEdit: true },
-        map: { Image: 'map/gta5.webp', Bounds: { minX: -5661.6, maxX: 6693.6, minY: -4058.5, maxY: 8429.3 }, Background: '#0fa8d2' },
+        map: {
+            Image: 'map/map.jpg', Bounds: { minX: -7729.3, maxX: 5763.0, minY: -6554.6, maxY: 10215.9 }, Background: '#0a2250',
+            Insets: [{ name: 'Cayo Perico', minX: 3700, maxX: 5900, minY: -6300, maxY: -4100, offsetX: -2744, offsetY: 52 }],
+        },
     };
 
     const mine = () => db.circles.filter((c) => c.members[ME]);

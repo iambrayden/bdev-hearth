@@ -106,12 +106,22 @@ Config.UI = {
     RefreshMs = 3000,              -- how often the open app polls for fresh positions
 }
 
--- Map background. Drop a top-down GTA V map image into html/map/ and set its name
--- and the world coordinates of its edges. Without an image the app draws a grid
--- (members, places and trails still work, they just float on a blank canvas).
--- The default bounds match the common square 8192px "GTA V atlas/satellite" renders.
+-- Map background: html/map/map.jpg (the server's postal map, with Cayo Perico drawn as an inset).
+-- Bounds are the world coordinates of the image's edges. They were calibrated by matching the
+-- 865 OCRP postal labels printed on the image to their real coordinates (median error ~12 m).
+-- If you swap in a higher-resolution export of the SAME map, keep these numbers.
 Config.Map = {
-    Image = 'map/gta5.webp',
-    Bounds = { minX = -5661.6, maxX = 6693.6, minY = -4058.5, maxY = 8429.3 },
-    Background = '#0fa8d2',        -- colour around the image (ocean)
+    Image = 'map/map.jpg',
+    Bounds = { minX = -7729.3, maxX = 5763.0, minY = -6554.6, maxY = 10215.9 },
+    Background = '#0a2250',        -- ocean colour around the image
+
+    -- Areas the image draws somewhere other than their real position. Positions inside the
+    -- real-world box are shifted by offset onto the drawn copy (and back when picking a spot).
+    Insets = {
+        {
+            name = 'Cayo Perico',
+            minX = 3700.0, maxX = 5900.0, minY = -6300.0, maxY = -4100.0,
+            offsetX = -2744.0, offsetY = 52.0,
+        },
+    },
 }

@@ -13,7 +13,7 @@ vehicle crashes and alerts the circle when a member goes down.
   or by texting a phone number, admin roles, rename, regenerate the code, remove members.
   When the admin leaves, the longest-standing member takes over.
 - **Live map**: member pins with initials, a driving badge, offline/greyed and alert states.
-  It uses your own GTA V map image (see `html/map/README.md`), or a grid if none is installed.
+  It uses the server's postal map (`html/map/map.jpg`), calibrated to world coordinates, with Cayo Perico as an inset.
 - **Member status**: "At Home", "Driving · 54 mph on Route 68", "Near Vinewood Blvd, Downtown Vinewood",
   "Offline · Sandy Shores, 2h ago", distance from you, speed and area.
 - **Places (geofences)**: Home/Work/School/etc. with a radius. Arrive/leave alerts use an
@@ -25,7 +25,9 @@ vehicle crashes and alerts the circle when a member goes down.
 - **Directions**: sets your in-game GPS waypoint to a member or a place.
 - **Check-in**: tells the circle where you are, with an optional message.
 - **SOS** (press and hold): goes to every circle, even ones where you paused sharing.
-  Members get a phone notification and a flashing map blip.
+  Members get a phone notification and a flashing blip that follows the person on the
+  pause-menu map and minimap until the alert expires (`Config.Alerts.SOSBlipSeconds`).
+  Crash and downed alerts work the same way.
 - **Crash detection**: a big speed drop plus a collision while driving fast alerts the circle.
 - **Downed alert**: triggers on Qbox `isdead` / `inlaststand`.
 - **Privacy controls**: per-circle *Share my location* (pause) and *Notifications* toggles.
@@ -50,7 +52,7 @@ vehicle crashes and alerts the circle when a member goes down.
    ensure bdev-hearth
    ```
 3. Tables are created on start (`install.sql` has them if you prefer to import by hand).
-4. Optional: put a GTA V map image in `html/map/` (see `html/map/README.md`).
+4. The map image ships in `html/map/` already calibrated (see `html/map/README.md`).
 5. Restart. **Hearth** appears on every home screen (or in the App Store with
    `Config.App.appStoreOnly = true`).
 
@@ -71,7 +73,7 @@ Everything is in `config.lua`. The settings people usually change:
 | `Config.Places.*` | 15 places, 25-400 m | Geofence limits, exit buffer, icons |
 | `Config.Alerts.*` | on | SOS/crash/downed alerts and cooldowns |
 | `Config.SpeedUnit` | `mph` | `mph` (miles/feet) or `kmh` (km/m) |
-| `Config.Map` | `map/gta5.webp` | Map image and its world-coordinate bounds |
+| `Config.Map` | `map/map.jpg` | Map image, its world-coordinate bounds and the Cayo inset |
 
 If you change `Config.App.name`, also change `appId` in `html/app.js` (`setupBridge`).
 

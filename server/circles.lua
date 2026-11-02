@@ -138,19 +138,26 @@ function Circles.Log(circleId, cid, name, kind, opts)
     if opts.message and opts.message ~= '' then text = text .. ': ' .. opts.message end
     local urgent = kind == 'sos' or kind == 'crash' or kind == 'downed'
 
+    local watchers = {}
     for memberCid, member in pairs(circle.members) do
-        local src = memberCid ~= cid and Tracker.SourceOf(memberCid)
-        -- Urgent alerts ignore the member's notification toggle.
-        if src and (member.notify or urgent) then
-            Bridge.Notify(src, circle.name, text, urgent and 'error' or 'inform')
-            if urgent and coords then
-                TriggerClientEvent('bdev-hearth:client:alert', src, {
-                    kind = kind, name = name, circle = circle.name,
-                    x = coords.x, y = coords.y, z = coords.z,
-                })
+        if memberCid ~= cid then
+            local src = Tracker.SourceOf(memberCid)
+            -- Urgent alerts ignore the member's notification toggle.
+            if src and (member.notify or urgent) then
+                Bridge.Notify(src, circle.name, text, urgent and 'error' or 'inform')
+                if urgent and coords then
+                    TriggerClientEvent('bdev-hearth:client:alert', src, {
+                        id = cid, kind = kind, name = name, circle = circle.name,
+                        x = coords.x, y = coords.y, z = coords.z,
+                        seconds = Config.Alerts.SOSBlipSeconds,
+                    })
+                end
             end
+            if urgent then watchers[#watchers + 1] = memberCid end
         end
     end
+    -- Keep the alert blip on everyone's pause-menu map moving with the person.
+    if urgent and coords then Tracker.Follow(cid, watchers, Config.Alerts.SOSBlipSeconds) end
 end
 
 Circles.eventCache = {} -- [circleId] = rows (cleared whenever an event is logged)
